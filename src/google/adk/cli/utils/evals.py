@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import os
 from typing import Any
 from typing import Tuple
 
@@ -22,7 +24,15 @@ from typing_extensions import deprecated
 
 from ...evaluation.eval_case import IntermediateData
 from ...evaluation.eval_case import Invocation
+from ...evaluation.gcs_eval_set_results_manager import GcsEvalSetResultsManager
+from ...evaluation.gcs_eval_sets_manager import GcsEvalSetsManager
 from ...sessions.session import Session
+
+
+@dataclasses.dataclass(frozen=True)
+class GcsEvalManagers:
+  eval_sets_manager: GcsEvalSetsManager
+  eval_set_results_manager: GcsEvalSetResultsManager
 
 
 @deprecated('Use convert_session_to_eval_invocations instead.')
@@ -176,3 +186,37 @@ def convert_session_to_eval_invocations(session: Session) -> list[Invocation]:
       )
 
   return invocations
+
+
+def create_gcs_eval_managers_from_uri(
+    evals_storage_uri: str,
+) -> GcsEvalManagers:
+  """Creates GcsEvalManagers from evals_storage_uri.
+
+  Args:
+      evals_storage_uri: The evals storage URI to use. Supported URIs:
+        gs://<bucket name>. If a path is provided, the bucket will be extracted.
+
+  Returns:
+      GcsEvalManagers: The GcsEvalManagers object.
+
+  Raises:
+      ValueError: If the evals_storage_uri is not supported.
+  """
+  if evals_storage_uri.startswith('gs://'):
+    gcs_bucket = evals_storage_uri.split('://')[1]
+    eval_sets_manager = GcsEvalSetsManager(
+        bucket_name=gcs_bucket, project=os.environ['GOOGLE_CLOUD_PROJECT']
+    )
+    eval_set_results_manager = GcsEvalSetResultsManager(
+        bucket_name=gcs_bucket, project=os.environ['GOOGLE_CLOUD_PROJECT']
+    )
+    return GcsEvalManagers(
+        eval_sets_manager=eval_sets_manager,
+        eval_set_results_manager=eval_set_results_manager,
+    )
+  else:
+    raise ValueError(
+        f'Unsupported evals storage URI: {evals_storage_uri}. Supported URIs:'
+        ' gs://<bucket name>'
+    )
